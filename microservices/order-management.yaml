@@ -14,19 +14,44 @@ spec:
       labels:
         app: order-management
         version: v1
-    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
       containers:
       - name: order-management
         image: rslim087/order-management:1.0.0
+        imagePullPolicy: IFNotPresent
         ports:
         - containerPort: 9090
-        env:
-        - name: PRODUCT_INVENTORY_API_HOST
-          value: "http://product-inventory"
-        - name: PRODUCT_CATALOG_API_HOST
-          value: "http://product-catalog"
-        - name: SHIPPING_HANDLING_API_HOST
-          value: "http://shipping-and-handling"
+          name: http
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 9090
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        envFrom:
+        - configMapRef:
+            name: ecommerce-config
 ---
 apiVersion: v1
 kind: Service

@@ -14,3 +14,16 @@ spec:
     backendRefs:
     - name: ecommerce-ui
       port: 4000
+    timeouts:
+      request: 2s
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+    - type: RequestHeaderModifier
+      requestHeaderModifier:
+        add:
+          - name: x-istio-retry
+            value: "true"
