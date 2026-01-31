@@ -1,0 +1,54 @@
+name: "Deploy Ecommerce App to GKE"
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: 'read'
+  id-token: 'write'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Install GKE Auth Plugin
+        run: gcloud components install gke-gcloud-auth-plugin
+
+      - name: Get GKE Credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ecommerce-cluster
+          location: us-central1
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Install Istio (Ambient Profile)
+        run: |
+          curl -L https://istio.io/downloadIstio | ISTIO_VERSION=1.24.2 sh -
+          cd istio-1.24.2
+          export PATH=$PWD/bin:$PATH
+          istioctl install --set profile=ambient -y
+
+      - name: Deploy Ambient Mesh Configuration
+        run: |
+          kubectl apply -f istio/ambient-namespace.yaml
+          kubectl apply -f istio/waypoint.yaml
+
+      - name: Deploy Microservices
+        run: |
+          kubectl apply -f microservices/
