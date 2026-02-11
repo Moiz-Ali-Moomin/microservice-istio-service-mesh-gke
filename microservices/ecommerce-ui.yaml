@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: ecommerce-ui
   namespace: ecommerce
+  labels:
+    app: ecommerce-ui
+    version: v1
 spec:
   replicas: 1
   selector:
@@ -22,7 +25,7 @@ spec:
       containers:
       - name: ecommerce-ui
         image: rslim087/ecommerce-ui:latest
-        imagePullPolicy: IFNotPresent
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 4000
           name: http

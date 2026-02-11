@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: order-management-v2
   namespace: ecommerce
+  labels:
+    app: order-management
+    version: v2
 spec:
   replicas: 1
   selector:
@@ -15,6 +18,9 @@ spec:
         app: order-management
         version: v2
     spec:
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
       containers:
       - name: order-management
         image: rslim087/order-management:2.0.0
@@ -27,10 +33,19 @@ spec:
           value: "http://product-catalog"
         - name: SHIPPING_HANDLING_API_HOST
           value: "http://shipping-and-handling"
+        - name: HOME
+          value: "/tmp"
+        - name: _JAVA_OPTIONS
+          value: "-Duser.home=/tmp"
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-volume
+        - mountPath: /root
+          name: tmp-volume
         # Intentionally omitting the MongoDB connection string
         # This will cause the service to fail when trying to access the database
 ---
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: DestinationRule
 metadata:
   name: order-management
@@ -56,7 +71,7 @@ spec:
       interval: 30s
       baseEjectionTime: 30s
 ---
-apiVersion: networking.istio.io/v1alpha3
+apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: order-management

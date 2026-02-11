@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: ecommerce
+  labels:
+    app: mongodb
+spec:
+  ports:
+  - port: 27017
+    targetPort: 27017
+  selector:
+    app: mongodb
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: ecommerce
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb
+  namespace: ecommerce
+  labels:
+    app: mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+    metadata:
+      labels:
+        app: mongodb
+      annotations:
+        sidecar.istio.io/proxyCPULimit: "100m"
+        sidecar.istio.io/proxyCPU: "50m"
+    spec:
+      securityContext:
+        fsGroup: 999
+        runAsNonRoot: true
+        runAsUser: 999
+      containers:
+      - name: mongodb
+        image: mongo:6.0
+        ports:
+        - containerPort: 27017
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "150m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        volumeMounts:
+        - name: mongodb-data
+          mountPath: /data/db
+        livenessProbe:
+          tcpSocket:
+            port: 27017
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 27017
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: mongodb-data
+        persistentVolumeClaim:
+          claimName: mongodb-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-management
+  namespace: ecommerce
+  labels:
+    app: order-management
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-management
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: order-management
+        version: v2
+      annotations:
+        sidecar.istio.io/proxyCPULimit: "100m"
+        sidecar.istio.io/proxyCPU: "50m"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 2000
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
+      containers:
+      - name: order-management
+        image: rslim087/order-management:2.0.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9090
+          name: http
+        env:
+        - name: PRODUCT_INVENTORY_API_HOST
+          value: "http://product-inventory"
+        - name: PRODUCT_CATALOG_API_HOST
+          value: "http://product-catalog"
+        - name: SHIPPING_HANDLING_API_HOST
+          value: "http://shipping-and-handling"
+        - name: SPRING_DATA_MONGODB_URI
+          value: "mongodb://mongodb:27017/orderdb"
+        - name: SPRING_DATA_MONGODB_DATABASE
+          value: "orderdb"
+        - name: HOME
+          value: "/tmp"
+        - name: _JAVA_OPTIONS
+          value: "-Duser.home=/tmp"
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-volume
+        - mountPath: /root
+          name: tmp-volume
+        - mountPath: /app/target
+          name: tmp-volume
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "150m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
+        livenessProbe:
+          tcpSocket:
+            port: 9090
+          initialDelaySeconds: 45
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: 9090
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true

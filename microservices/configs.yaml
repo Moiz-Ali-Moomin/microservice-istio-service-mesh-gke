@@ -10,3 +10,10 @@ data:
   REACT_APP_ORDER_API_HOST: "http://order-management"
   REACT_APP_SHIPPING_API_HOST: "http://shipping-and-handling"
   REACT_APP_CONTACT_API_HOST: "http://contact-support-team"
+  # Backend Service Variables
+  PROFILE_MANAGEMENT_API_HOST: "http://profile-management"
+  PRODUCT_CATALOG_API_HOST: "http://product-catalog"
+  PRODUCT_INVENTORY_API_HOST: "http://product-inventory"
+  ORDER_MANAGEMENT_API_HOST: "http://order-management"
+  SHIPPING_HANDLING_API_HOST: "http://shipping-and-handling"
+  CONTACT_SUPPORT_API_HOST: "http://contact-support-team"

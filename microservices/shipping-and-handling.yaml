@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: shipping-and-handling
   namespace: ecommerce
+  labels:
+    app: shipping-and-handling
+    version: v1
 spec:
   replicas: 1
   selector:
@@ -14,17 +17,27 @@ spec:
       labels:
         app: shipping-and-handling
         version: v1
+    spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 2000
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
       containers:
       - name: shipping-and-handling
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-volume
         image: rslim087/shipping-and-handling:1.0.0
-        imagePullPolicy: IFNotPresent
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
-          name: http
+          name: tcp-shipping
+        env:
+        - name: GOCACHE
+          value: "/tmp"
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -36,24 +49,21 @@ spec:
             memory: 64Mi
           limits:
             cpu: 250m
-            memory: 128Mi
+            memory: 512Mi
         livenessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 8080
           initialDelaySeconds: 15
           periodSeconds: 10
         readinessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 8080
           initialDelaySeconds: 5
           periodSeconds: 5
         envFrom:
         - configMapRef:
             name: ecommerce-config
-        ports:
-        - containerPort: 8080
+
 ---
 apiVersion: v1
 kind: Service

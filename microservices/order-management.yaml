@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: order-management
   namespace: ecommerce
+  labels:
+    app: order-management
+    version: v1
 spec:
   replicas: 1
   selector:
@@ -14,17 +17,31 @@ spec:
       labels:
         app: order-management
         version: v1
+    spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 2000
+      volumes:
+      - name: tmp-volume
+        emptyDir: {}
       containers:
       - name: order-management
+        volumeMounts:
+        - mountPath: /tmp
+          name: tmp-volume
+        - mountPath: /root
+          name: tmp-volume
         image: rslim087/order-management:1.0.0
-        imagePullPolicy: IFNotPresent
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 9090
           name: http
+        env:
+        - name: HOME
+          value: "/tmp"
+        - name: _JAVA_OPTIONS
+          value: "-Duser.home=/tmp"
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true
@@ -38,14 +55,12 @@ spec:
             cpu: 250m
             memory: 128Mi
         livenessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 9090
           initialDelaySeconds: 15
           periodSeconds: 10
         readinessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 9090
           initialDelaySeconds: 5
           periodSeconds: 5

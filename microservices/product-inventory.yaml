@@ -3,6 +3,9 @@ kind: Deployment
 metadata:
   name: product-inventory
   namespace: ecommerce
+  labels:
+    app: product-inventory
+    version: v1
 spec:
   replicas: 1
   selector:
@@ -14,6 +17,7 @@ spec:
       labels:
         app: product-inventory
         version: v1
+    spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -21,7 +25,7 @@ spec:
       containers:
       - name: product-inventory
         image: rslim087/product-inventory:1.0.0
-        imagePullPolicy: IFNotPresent
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3002
           name: http
@@ -38,14 +42,12 @@ spec:
             cpu: 250m
             memory: 128Mi
         livenessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 3002
           initialDelaySeconds: 15
           periodSeconds: 10
         readinessProbe:
-          httpGet:
-            path: /
+          tcpSocket:
             port: 3002
           initialDelaySeconds: 5
           periodSeconds: 5

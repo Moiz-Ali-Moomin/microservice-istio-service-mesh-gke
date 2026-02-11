@@ -1,200 +1,180 @@
-# Ecommerce Microservice with Istio Ambient Mesh on GKE
+# Ecommerce Microservice with Istio Service Mesh on GKE
 
-This project provides a complete blueprint for deploying a microservice application on Google Kubernetes Engine (GKE) using **Istio Ambient Mesh** (sidecar-less). It features automated infrastructure via Terraform and secure CI/CD using GitHub Actions with OIDC.
-
----
-
-## 🎯 Why This Project?
-
-This project demonstrates how modern DevOps and Platform Engineering is done in 2026.
-
-It solves common real-world problems:
-- Secure CI/CD without storing cloud credentials
-- Automated Kubernetes infrastructure on GCP
-- Scalable microservice deployment
-- Traffic management without sidecar overhead
+This project provides a complete blueprint for deploying a microservice application on Google Kubernetes Engine (GKE) or any Kubernetes cluster using **Istio Service Mesh**. It features automated infrastructure via Terraform and secure CI/CD using GitHub Actions.
 
 ---
 
-## 🧠 High-Level Architecture
+## 🎯 Architecture
 
 ![Architecture Diagram](docs/architecture.png)
 
-1.  **GCP GKE Cluster**: Managed Kubernetes with Workload Identity enabled.
-2.  **Istio Ambient Mesh**: High-performance service mesh without sidecar overhead.
-3.  **OIDC Authentication**: Secure, keyless authentication between GitHub and GCP.
-4.  **GitHub Actions**: Fully automated deployment on every push to `main`.
+1.  **Kubernetes Cluster**: Managed GKE or standard Kubernetes.
+2.  **Istio Service Mesh**: Sidecar-based mesh for traffic management, security, and observability.
+3.  **Microservices**: E-commerce microservices (UI, Order, Product, etc.).
+4.  **Ingress Gateway**: Istio Gateway managing entry traffic.
 
 ---
 
+## 🛠️ Prerequisites
 
-
-## 🧭 How to Use This Project
-
-### Beginner Path
-If you are new to DevOps or Kubernetes:
-1. Read the Architecture section
-2. Skim Terraform code (don’t try to understand everything)
-3. Focus on how CI/CD deploys to GKE
-4. Learn what Istio Ambient Mesh does conceptually
-
-### Advanced Path
-If you are experienced:
-1. Review OIDC Workload Identity Federation
-2. Inspect IAM least-privilege policies
-3. Study Istio Ambient Mesh (ztunnel + waypoint)
-4. Extend with canary or traffic shifting
-
-## 📚 What You Will Learn From This Project
-
-- How GitHub Actions authenticates to GCP using OIDC
-- How to provision GKE securely using Terraform
-- How Istio Ambient Mesh works without sidecars
-- How CI/CD deploys microservices into Kubernetes
-- How modern platform teams reduce operational overhead
+- **Kubernetes Cluster** (GKE, Minikube, Docker Desktop, etc.)
+- **Tools**:
+    - `kubectl`
+    - `helm`
+    - `curl`
 
 ---
 
-## 📋 Prerequisites
-- A Google Cloud Platform account and a project.
-- A GitHub repository.
-- Local tools: `gcloud`, `terraform`, `kubectl`.
+## 🚀 Installation Guide
+
+This guide follows the standard Helm-based installation for Istio.
+
+### 1. Install Istio (Base & Istiod)
+
+Add the Istio Helm repository:
+
+```bash
+helm repo add istio https://istio-release.storage.googleapis.com/charts
+helm repo update
+```
+
+Create the `istio-system` namespace and install the core components:
+
+```bash
+kubectl create namespace istio-system
+
+# Install Istio Base
+helm install istio-base istio/base -n istio-system --version 1.25.2
+
+# Install Istiod (Control Plane)
+helm install istiod istio/istiod -n istio-system --version 1.25.2 --wait
+```
+
+### 2. Install Istio Ingress Gateway
+
+Install the Gateway to manage incoming traffic:
+
+```bash
+helm install istio-ingress istio/gateway -n istio-system --version 1.24.0
+```
+
+### 3. Install Add-ons (Observability)
+
+Install Prometheus, Grafana, Kiali, and Jaeger for monitoring and tracing:
+
+```bash
+mkdir -p istio-addons
+
+# Download manifests
+curl -L https://raw.githubusercontent.com/istio/istio/release-1.25/samples/addons/prometheus.yaml -o istio-addons/prometheus.yaml
+curl -L https://raw.githubusercontent.com/istio/istio/release-1.25/samples/addons/grafana.yaml -o istio-addons/grafana.yaml
+curl -L https://raw.githubusercontent.com/istio/istio/release-1.25/samples/addons/kiali.yaml -o istio-addons/kiali.yaml
+curl -L https://raw.githubusercontent.com/istio/istio/release-1.25/samples/addons/jaeger.yaml -o istio-addons/jaeger.yaml
+
+# Apply manifests
+kubectl apply -f istio-addons/prometheus.yaml
+kubectl apply -f istio-addons/grafana.yaml
+kubectl apply -f istio-addons/kiali.yaml
+kubectl apply -f istio-addons/jaeger.yaml
+```
+
+Verifying the installation:
+```bash
+kubectl get pods -n istio-system
+kubectl get svc -n istio-system
+```
+
+### 4. Deploy Application Namespace
+
+Create the `ecommerce` namespace and enable **Istio Sidecar Injection**:
+
+```bash
+kubectl create namespace ecommerce
+kubectl label namespace ecommerce istio-injection=enabled
+```
+
+### 5. Deploy Microservices
+
+Deploy the configuration maps and microservices:
+
+```bash
+# Apply ConfigMap
+kubectl apply -f microservices/configs.yaml
+
+# Apply all microservices
+kubectl apply -f microservices/
+```
+
+### 6. Apply Istio Traffic Rules
+
+Apply the Gateway and VirtualService configurations:
+
+```bash
+kubectl apply -f istio/
+```
 
 ---
 
-## 🛠️ Step 1: Configure GCP Project
-Before running Terraform, ensure your GCP project is ready:
+## 🔍 Verification
 
-1.  **Enable Required APIs**:
-    ```bash
-    gcloud services enable \
-      compute.googleapis.com \
-      container.googleapis.com \
-      iam.googleapis.com \
-      iamcredentials.googleapis.com \
-      sts.googleapis.com
-    ```
-2.  **Set your Project ID**:
-    ```bash
-    gcloud config set project YOUR_PROJECT_ID
-    ```
+### Check Pods
+Ensure all pods are running and have **2/2** containers (application + istio-proxy sidecar):
 
----
+```bash
+kubectl get pods -n ecommerce
+# Example output:
+# NAME                               READY   STATUS    RESTARTS   AGE
+# ecommerce-ui-xxx                   2/2     Running   0          1m
+# product-catalog-xxx                2/2     Running   0          1m
+```
 
-## 🏗️ Step 2: Infrastructure with Terraform
-This step creates the VPC, GKE cluster, and OIDC Workload Identity Federation.
+### Access Application
+Get the External IP of the Ingress Gateway:
 
-1.  **Navigate to Terraform Directory**:
-    ```bash
-    cd terraform
-    ```
-2.  **Initialize and Apply**:
-    ```bash
-    terraform init
-    terraform apply \
-      -var="project_id=YOUR_PROJECT_ID" \
-      -var="github_repo=YOUR_GITHUB_REPO" # e.g., "myuser/my-repo"
-    ```
-3.  **Save the Outputs**:
-    Terraform will output `WIF_PROVIDER` and `WIF_SERVICE_ACCOUNT`. **Copy these.**
+```bash
+kubectl get svc -n istio-system istio-ingress
+```
+Access the application at `http://<EXTERNAL-IP>/`.
+
+### Observability Dashboard (Kiali)
+To visualize the mesh:
+
+```bash
+istioctl dashboard kiali
+# OR manually:
+kubectl port-forward svc/kiali -n istio-system 20001:20001
+# Open http://localhost:20001
+```
 
 ---
 
-## 🔐 Step 3: Setup GitHub Actions & OIDC
-We use OIDC (Workload Identity Federation) to avoid using static long-lived JSON keys.
+## 🧪 Advanced Features
 
-1.  **Go to your GitHub Repository** -> `Settings` -> `Secrets and variables` -> `Actions`.
-2.  **Add the following Repository Secrets**:
-    - `GCP_PROJECT_ID`: Your GCP project ID.
-    - `WIF_PROVIDER`: The output from Terraform (e.g., `projects/12345/locations/global/workloadIdentityPools/github-pool/providers/github-provider`).
-    - `WIF_SERVICE_ACCOUNT`: The service account email from Terraform (e.g., `github-actions-sa@yourproject.iam.gserviceaccount.com`).
+### Canary Deployment
+Deploy a canary version of `product-catalog`:
 
----
+```bash
+kubectl apply -f canary-deployment/product-catalog-v2.yaml
+```
 
-## 🛳️ Step 4: The Deployment Process
-Once you push code to the `main` branch, the GitHub Action (`.github/workflows/ci.yml`) triggers:
+### Circuit Breaker
+Deploy a circuit breaker example:
 
-### Flow:
-1.  **GCP Auth**: Uses the `google-github-actions/auth` action to exchange a GitHub token for a short-lived GCP access token using OIDC.
-2.  **Connect to GKE**: Pulls the cluster credentials.
-3.  **Istio Installation**:
-    - Downloads Istio CLI.
-    - Installs Istio using the **Ambient profile**:
-      ```bash
-      istioctl install --set profile=ambient -y
-      ```
-4.  **Namespace Configuration**:
-    - Creates the `ecommerce` namespace.
-    - Labels it for Ambient mode: `istio.io/dataplane-mode=ambient`.
-5.  **Service Mesh Deployment**:
-    - Deploys the **Waypoint Proxy** (the L7 engine for our sidecar-less mesh).
-    - Deploys the **Gateway API** resources for ingress traffic.
-6.  **Microservices**: Deploys all ecommerce apps found in `microservices/` folder.
-
----
-
-## 🔍 Step 5: Verify Your Mesh
-After the pipeline finishes, run these commands to see your Sidecar-less mesh in action:
-
-1.  **Check Pods (No Sidecars)**:
-    ```bash
-    kubectl get pods -n ecommerce
-    # Note: READY should show "1/1", showing NO sidecar proxy container!
-    ```
-2.  **Check L4 Connectivity**:
-    ```bash
-    istioctl proxy-status
-    # Shows the node-shared ztunnel handles the security.
-    ```
-3.  **Check Waypoint (L7 Proxy)**:
-    ```bash
-    kubectl get gtw -n ecommerce
-    # Verify the ecommerce-waypoint is programmed.
-    ```
-
----
-
-
-
-## 🧠 Key Design Decisions
-
-- Used OIDC instead of service account keys to improve security
-- Chose Istio Ambient Mesh to reduce sidecar overhead
-- Terraform manages both infrastructure and IAM for consistency
-- GitHub Actions used instead of Jenkins for cloud-native CI/CD
-
-## 🛠️ Common Issues & Fixes
-
-### GitHub Actions authentication fails
-- Ensure WIF_PROVIDER and WIF_SERVICE_ACCOUNT secrets are correct
-- Verify GitHub repo name matches Terraform configuration
-
-### Pods not joining the mesh
-- Check namespace label: istio.io/dataplane-mode=ambient
-- Ensure ztunnel is running in istio-system
-
-### No ingress traffic
-- Verify Gateway and HTTPRoute resources
-- Check waypoint proxy status
-
-## 💼 How This Project Maps to Real DevOps Roles
-
-- DevOps Engineer → CI/CD, Kubernetes, Terraform
-- Cloud Engineer → GCP, IAM, Workload Identity
-- Platform Engineer → Service Mesh, secure automation
-
-## 🚧 Future Improvements
-
-- Canary deployments using Istio traffic splitting
-- GitOps with ArgoCD
-- HPA based on custom metrics
-- Distributed tracing with OpenTelemetry
+```bash
+kubectl apply -f circuit-breaker-func/order-management-v2.yaml
+```
 
 ---
 
 ## 🧹 Cleanup
-To avoid GCP costs, destroy everything when done:
+
+To remove the deployment:
+
 ```bash
-cd terraform
-terraform destroy -var="project_id=YOUR_PROJECT_ID" -var="github_repo=YOUR_GITHUB_REPO"
+kubectl delete -f microservices/
+kubectl delete namespace ecommerce
+helm uninstall istio-ingress -n istio-system
+helm uninstall istiod -n istio-system
+helm uninstall istio-base -n istio-system
+kubectl delete namespace istio-system
 ```
